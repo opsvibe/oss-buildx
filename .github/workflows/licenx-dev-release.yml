@@ -141,7 +141,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
-          if ($multiConfig) { $ctestArgs += @('--config', $Env:LICENX_BUILD_CONFIG) }
+          if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
           ctest @ctestArgs
 
       - name: Package release artifacts
@@ -326,7 +326,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
-          if ($multiConfig) { $ctestArgs += @('--config', $Env:LICENX_BUILD_CONFIG) }
+          if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
           ctest @ctestArgs
 
       - name: Package release artifacts
@@ -502,7 +502,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
-          if ($multiConfig) { $ctestArgs += @('--config', $Env:LICENX_BUILD_CONFIG) }
+          if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
           ctest @ctestArgs
 
       - name: Package release artifacts
