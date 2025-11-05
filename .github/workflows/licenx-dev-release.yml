@@ -769,7 +769,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dockerfileInput = '${{ github.event.inputs.dockerfile-relative-path || 'docker/Dockerfile' }}'
+          $dockerfileInput = "${{ github.event.inputs.dockerfile-relative-path }}"
+          if ([string]::IsNullOrWhiteSpace($dockerfileInput)) {
+            $dockerfileInput = 'docker/Dockerfile'
+            Write-Host "::notice::dockerfile-relative-path input not provided; defaulting to $dockerfileInput"
+          }
+
+          $dockerfileInput = $dockerfileInput.Trim()
 
           # Construct path relative to the licenx submodule
           $dockerfile = Join-Path $Env:GITHUB_WORKSPACE $Env:LICENX_SUBMODULE_PATH $dockerfileInput
@@ -779,16 +785,42 @@ jobs:
             return
           }
 
-          if ([string]::IsNullOrWhiteSpace($Env:ACR_LOGIN_SERVER) -or [string]::IsNullOrWhiteSpace($Env:ACR_IMAGE_NAME)) {
-            throw "ACR_LOGIN_SERVER ($Env:ACR_LOGIN_SERVER) and ACR_IMAGE_NAME ($Env:ACR_IMAGE_NAME) must both be set before building the container image."
+          $acrLoginServer = $Env:ACR_LOGIN_SERVER
+          $acrImageName = $Env:ACR_IMAGE_NAME
+
+          if ([string]::IsNullOrWhiteSpace($acrLoginServer)) {
+            throw "ACR_LOGIN_SERVER environment variable is not set."
           }
+
+          $acrLoginServer = $acrLoginServer.Trim()
+
+          if ([string]::IsNullOrWhiteSpace($acrImageName)) {
+            $acrImageName = 'licenxsrv'
+            Write-Host "::warning::ACR_IMAGE_NAME not set; defaulting to '$acrImageName'."
+          }
+
+          $acrImageName = $acrImageName.Trim()
+
+          Write-Host "Using ACR login server: $acrLoginServer"
+          Write-Host "Using ACR image name: $acrImageName"
 
           $context = Split-Path $dockerfile -Parent
           az acr login --name $Env:ACR_REGISTRY
 
-          $tag = '${{ github.event.inputs.docker-image-tag || 'latest' }}'
-          $fullTagLatest = "$Env:ACR_LOGIN_SERVER/$Env:ACR_IMAGE_NAME:latest"
-          $fullTagCustom = "$Env:ACR_LOGIN_SERVER/$Env:ACR_IMAGE_NAME:$tag"
+          $tagInput = "${{ github.event.inputs.docker-image-tag }}"
+          if ([string]::IsNullOrWhiteSpace($tagInput)) {
+            $tag = 'latest'
+            Write-Host "::notice::docker-image-tag input not provided; defaulting to $tag"
+          } else {
+            $tag = $tagInput
+          }
+
+          $tag = $tag.Trim()
+
+          $fullTagLatest = "$acrLoginServer/$acrImageName:latest"
+          $fullTagCustom = "$acrLoginServer/$acrImageName:$tag"
+
+          Write-Host "Building image with tags: $fullTagLatest and $fullTagCustom"
 
           docker build --file $dockerfile --build-arg LICENX_BUILD_DIR=$Env:LICENX_BUILD_DIR --tag $fullTagLatest --tag $fullTagCustom $context
           docker push $fullTagLatest
