@@ -82,7 +82,8 @@ jobs:
         id: run-vcpkg-linux
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgJsonGlob: '${{ env.LICENX_SOURCE_DIR }}/vcpkg.json'
+          vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
+          vcpkgDirectory: ${{ format('{0}/vcpkg', env.LICENX_SOURCE_DIR) }}
           runVcpkgInstall: true
 
       - name: Configure vcpkg environment
@@ -284,7 +285,8 @@ jobs:
         id: run-vcpkg-macos
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgJsonGlob: '${{ env.LICENX_SOURCE_DIR }}/vcpkg.json'
+          vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
+          vcpkgDirectory: ${{ format('{0}/vcpkg', env.LICENX_SOURCE_DIR) }}
           runVcpkgInstall: true
 
       - name: Configure vcpkg environment
@@ -479,7 +481,8 @@ jobs:
         id: run-vcpkg-windows
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgJsonGlob: '${{ env.LICENX_SOURCE_DIR }}/vcpkg.json'
+          vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
+          vcpkgDirectory: ${{ format('{0}/vcpkg', env.LICENX_SOURCE_DIR) }}
           runVcpkgInstall: true
 
       - name: Configure vcpkg environment
