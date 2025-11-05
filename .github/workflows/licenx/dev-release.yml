@@ -1,0 +1,221 @@
+name: dev-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      licenx-environment:
+        description: CMake environment passed to the LicenX generator
+        default: dev
+        required: false
+      licenx-branch:
+        description: LicenX submodule branch or ref to build
+        default: main
+        required: false
+      dockerfile-relative-path:
+        description: Optional Dockerfile path relative to repository root
+        default: ergox/licenx/docker/admin-cli-server/Dockerfile
+        required: false
+      docker-image-tag:
+        description: Container tag to publish alongside latest
+        default: latest
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  LICENX_SUBMODULE_PATH: ergox/licenx
+  LICENX_SOURCE_DIR: ergox/licenx
+  LICENX_BUILD_DIR: ergox/licenx/build
+  LICENX_BUILD_CONFIG: Release
+  LICENX_ARTIFACT_ROOT: artifacts/licenx
+  ACR_REGISTRY: ergox-ehaeg0gpesc0gag6
+  ACR_LOGIN_SERVER: ergox-ehaeg0gpesc0gag6.azurecr.io
+  ACR_IMAGE_NAME: licenxsrv
+  AZURE_STORAGE_ACCOUNT: ergoxbuild
+  AZURE_STORAGE_SHARE: dev
+  AZURE_STORAGE_PATH: licenx/latest
+
+jobs:
+  build-and-release:
+    name: Build and Release LicenX dev payloads
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          token: ${{ secrets.ERGOX_SUBMODULE_TOKEN }}
+
+      - name: Sync LicenX submodule latest ref
+        shell: pwsh
+        env:
+          SUBMODULE_TOKEN: ${{ secrets.ERGOX_SUBMODULE_TOKEN }}
+          LICENX_BRANCH: ${{ github.event.inputs.licenx-branch || 'main' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($Env:SUBMODULE_TOKEN)) {
+            throw 'Secret ERGOX_SUBMODULE_TOKEN is required to access the private licenx repository.'
+          }
+
+          $encoded = [Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes("$Env:SUBMODULE_TOKEN:x-oauth-basic"))
+          $extraHeader = "Authorization: Basic $encoded"
+          $Env:GIT_HTTP_EXTRAHEADER = $extraHeader
+
+          git submodule update --init --recursive --depth 1 $Env:LICENX_SUBMODULE_PATH
+
+          Push-Location $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" fetch origin $Env:LICENX_BRANCH --depth 1
+          git checkout --detach FETCH_HEAD
+          git submodule update --init --recursive --depth 1
+          $commit = git rev-parse HEAD
+          Write-Host "::notice::Using LicenX commit $commit from $Env:LICENX_BRANCH"
+          Pop-Location
+
+          Remove-Item Env:GIT_HTTP_EXTRAHEADER
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Configure LicenX build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake -S $Env:LICENX_SOURCE_DIR -B $Env:LICENX_BUILD_DIR -G "Visual Studio 17 2022" -A x64 -DLICENX_ENVIRONMENT='${{ github.event.inputs.licenx-environment || 'dev' }}' -DLICENX_BUILD_TESTS=OFF
+
+      - name: Build LicenX admin CLI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake --build $Env:LICENX_BUILD_DIR --config $Env:LICENX_BUILD_CONFIG --target licenx_admin_cli
+
+      - name: Build LicenX static library
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake --build $Env:LICENX_BUILD_DIR --config $Env:LICENX_BUILD_CONFIG --target licenx
+
+      - name: Package release artifacts
+        id: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $workspace = $Env:GITHUB_WORKSPACE
+          $buildDir = Join-Path $workspace $Env:LICENX_BUILD_DIR
+          $artifactsRoot = Join-Path $workspace $Env:LICENX_ARTIFACT_ROOT
+          $publishDir = Join-Path $artifactsRoot 'publish'
+          $cliDir = Join-Path $artifactsRoot 'admin-cli'
+          $sdkDir = Join-Path $artifactsRoot 'sdk'
+          $sdkLibDir = Join-Path $sdkDir 'lib'
+          $sdkIncludeDir = Join-Path $sdkDir 'include'
+
+          foreach ($dir in @($artifactsRoot, $publishDir, $cliDir, $sdkDir, $sdkLibDir, $sdkIncludeDir)) {
+            if (-not (Test-Path $dir)) {
+              New-Item -ItemType Directory -Path $dir | Out-Null
+            }
+          }
+
+          $config = $Env:LICENX_BUILD_CONFIG
+          $outputDir = Join-Path $buildDir $config
+
+          $cliExe = Join-Path $outputDir 'licenx_admin_cli.exe'
+          if (-not (Test-Path $cliExe)) {
+            throw "Expected CLI executable not found at $cliExe"
+          }
+          Copy-Item $cliExe $cliDir -Force
+
+          $cliPdb = Join-Path $outputDir 'licenx_admin_cli.pdb'
+          if (Test-Path $cliPdb) {
+            Copy-Item $cliPdb $cliDir -Force
+          }
+
+          $libSourceDir = $outputDir
+          $libraries = Get-ChildItem -Path $libSourceDir -File | Where-Object { $_.Extension -in '.lib', '.dll', '.exp', '.pdb' }
+          if ($libraries.Count -eq 0) {
+            throw "No library artifacts (*.lib|*.dll) found in $libSourceDir"
+          }
+          foreach ($artifact in $libraries) {
+            Copy-Item $artifact.FullName $sdkLibDir -Force
+          }
+
+          $includeSource = Join-Path $workspace (Join-Path $Env:LICENX_SOURCE_DIR 'include')
+          if (-not (Test-Path $includeSource)) {
+            throw "Header directory not found at $includeSource"
+          }
+          Copy-Item "$includeSource\*" $sdkIncludeDir -Recurse -Force
+
+          $readmeSource = Join-Path $workspace (Join-Path $Env:LICENX_SOURCE_DIR 'README.md')
+          if (Test-Path $readmeSource) {
+            Copy-Item $readmeSource $sdkDir -Force
+          }
+
+          $cliZip = Join-Path $publishDir 'licenx-admin-cli.zip'
+          $sdkZip = Join-Path $publishDir 'licenx-sdk.zip'
+
+          if (Test-Path $cliZip) { Remove-Item $cliZip -Force }
+          if (Test-Path $sdkZip) { Remove-Item $sdkZip -Force }
+
+          Compress-Archive -Path (Join-Path $cliDir '*') -DestinationPath $cliZip -Force
+          Compress-Archive -Path (Join-Path $sdkDir '*') -DestinationPath $sdkZip -Force
+
+          "LICENX_PUBLISH_DIR=$publishDir" | Out-File -FilePath $Env:GITHUB_ENV -Append
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: licenx-dev-release
+          path: ${{ env.LICENX_PUBLISH_DIR }}
+          if-no-files-found: error
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push LicenX server image
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dockerfileInput = '${{ github.event.inputs.dockerfile-relative-path || 'ergox/licenx/docker/admin-cli-server/Dockerfile' }}'
+          $dockerfile = Join-Path $Env:GITHUB_WORKSPACE $dockerfileInput
+          if (-not (Test-Path $dockerfile)) {
+            Write-Host "::warning::Dockerfile not found at $dockerfile. Skipping container build."
+            return
+          }
+
+          $context = Split-Path $dockerfile -Parent
+          az acr login --name $Env:ACR_REGISTRY
+
+          $tag = '${{ github.event.inputs.docker-image-tag || 'latest' }}'
+          $fullTagLatest = "$Env:ACR_LOGIN_SERVER/$Env:ACR_IMAGE_NAME:latest"
+          $fullTagCustom = "$Env:ACR_LOGIN_SERVER/$Env:ACR_IMAGE_NAME:$tag"
+
+          docker build --file $dockerfile --build-arg LICENX_BUILD_DIR=$Env:LICENX_BUILD_DIR --tag $fullTagLatest --tag $fullTagCustom $context
+          docker push $fullTagLatest
+          if ($tag -ne 'latest') {
+            docker push $fullTagCustom
+          }
+
+      - name: Publish packages to Azure Files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = $Env:LICENX_PUBLISH_DIR
+          if (-not (Test-Path $source)) {
+            throw "Publish directory $source was not created."
+          }
+
+          az storage file upload-batch `
+            --source $source `
+            --account-name $Env:AZURE_STORAGE_ACCOUNT `
+            --destination $Env:AZURE_STORAGE_SHARE `
+            --destination-path $Env:AZURE_STORAGE_PATH `
+            --overwrite `
+            --no-progress `
+            --auth-mode login
