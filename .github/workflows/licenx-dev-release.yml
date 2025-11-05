@@ -25,6 +25,14 @@ permissions:
   id-token: write
   packages: write
 
+env:
+  LICENX_SUBMODULE_PATH: ergox/licenx
+  LICENX_SOURCE_DIR: ergox/licenx
+  LICENX_BUILD_DIR: ergox/licenx/build
+  LICENX_BUILD_CONFIG: Release
+  LICENX_ARTIFACT_ROOT: ergox/licenx/artifacts
+  LICENX_ENVIRONMENT_INPUT: ${{ github.event.inputs.licenx-environment || 'dev' }}
+
 jobs:
   build-linux:
     name: Build + Test (Linux)
