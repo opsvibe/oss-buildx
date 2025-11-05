@@ -12,8 +12,8 @@ on:
         default: main
         required: false
       dockerfile-relative-path:
-        description: Optional Dockerfile path relative to repository root
-        default: ergox/licenx/docker/admin-cli-server/Dockerfile
+        description: Optional Dockerfile path relative to repository root (or submodule path)
+        default: docker/admin-cli-server/Dockerfile
         required: false
       docker-image-tag:
         description: Container tag to publish alongside latest
@@ -769,10 +769,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dockerfileInput = '${{ github.event.inputs.dockerfile-relative-path || 'ergox/licenx/docker/admin-cli-server/Dockerfile' }}'
-          $dockerfile = Join-Path $Env:GITHUB_WORKSPACE $dockerfileInput
+          $dockerfileInput = '${{ github.event.inputs.dockerfile-relative-path || 'docker/admin-cli-server/Dockerfile' }}'
+          
+          # If the path doesn't start with the submodule path, prepend it
+          if (-not $dockerfileInput.StartsWith($Env:LICENX_SUBMODULE_PATH)) {
+            $dockerfile = Join-Path $Env:GITHUB_WORKSPACE $Env:LICENX_SUBMODULE_PATH $dockerfileInput
+          } else {
+            $dockerfile = Join-Path $Env:GITHUB_WORKSPACE $dockerfileInput
+          }
+          
           if (-not (Test-Path $dockerfile)) {
-            Write-Host "::warning::Dockerfile not found at $dockerfile. Skipping container build."
+            Write-Host "::warning::Dockerfile not found at $dockerfile. Checked: $dockerfileInput"
             return
           }
 
