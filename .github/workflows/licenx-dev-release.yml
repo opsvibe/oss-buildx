@@ -77,12 +77,18 @@ jobs:
           $extraHeader = "Authorization: Basic $encoded"
           $Env:GIT_TERMINAL_PROMPT = '0'
 
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1 $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule sync --recursive $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive $Env:LICENX_SUBMODULE_PATH
 
           Push-Location $Env:LICENX_SUBMODULE_PATH
           git -c http.extraheader="$extraHeader" fetch origin $Env:LICENX_BRANCH --depth 1
           git checkout --detach FETCH_HEAD
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1
+          git -c http.extraheader="$extraHeader" submodule sync --recursive
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive
+          $cmakePath = Join-Path (Get-Location) 'CMakeLists.txt'
+          if (-not (Test-Path $cmakePath)) {
+            throw "CMakeLists.txt not found in $Env:LICENX_SUBMODULE_PATH after sync."
+          }
           $commit = git rev-parse HEAD
           Write-Host "::notice::Using LicenX commit $commit from $Env:LICENX_BRANCH"
           Pop-Location
@@ -257,12 +263,18 @@ jobs:
           $extraHeader = "Authorization: Basic $encoded"
           $Env:GIT_TERMINAL_PROMPT = '0'
 
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1 $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule sync --recursive $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive $Env:LICENX_SUBMODULE_PATH
 
           Push-Location $Env:LICENX_SUBMODULE_PATH
           git -c http.extraheader="$extraHeader" fetch origin $Env:LICENX_BRANCH --depth 1
           git checkout --detach FETCH_HEAD
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1
+          git -c http.extraheader="$extraHeader" submodule sync --recursive
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive
+          $cmakePath = Join-Path (Get-Location) 'CMakeLists.txt'
+          if (-not (Test-Path $cmakePath)) {
+            throw "CMakeLists.txt not found in $Env:LICENX_SUBMODULE_PATH after sync."
+          }
           $commit = git rev-parse HEAD
           Write-Host "::notice::Using LicenX commit $commit from $Env:LICENX_BRANCH"
           Pop-Location
@@ -430,12 +442,18 @@ jobs:
           $extraHeader = "Authorization: Basic $encoded"
           $Env:GIT_TERMINAL_PROMPT = '0'
 
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1 $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule sync --recursive $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive $Env:LICENX_SUBMODULE_PATH
 
           Push-Location $Env:LICENX_SUBMODULE_PATH
           git -c http.extraheader="$extraHeader" fetch origin $Env:LICENX_BRANCH --depth 1
           git checkout --detach FETCH_HEAD
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1
+          git -c http.extraheader="$extraHeader" submodule sync --recursive
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive
+          $cmakePath = Join-Path (Get-Location) 'CMakeLists.txt'
+          if (-not (Test-Path $cmakePath)) {
+            throw "CMakeLists.txt not found in $Env:LICENX_SUBMODULE_PATH after sync."
+          }
           $commit = git rev-parse HEAD
           Write-Host "::notice::Using LicenX commit $commit from $Env:LICENX_BRANCH"
           Pop-Location
@@ -613,12 +631,18 @@ jobs:
           $extraHeader = "Authorization: Basic $encoded"
           $Env:GIT_TERMINAL_PROMPT = '0'
 
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1 $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule sync --recursive $Env:LICENX_SUBMODULE_PATH
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive $Env:LICENX_SUBMODULE_PATH
 
           Push-Location $Env:LICENX_SUBMODULE_PATH
           git -c http.extraheader="$extraHeader" fetch origin $Env:LICENX_BRANCH --depth 1
           git checkout --detach FETCH_HEAD
-          git -c http.extraheader="$extraHeader" submodule update --init --recursive --depth 1
+          git -c http.extraheader="$extraHeader" submodule sync --recursive
+          git -c http.extraheader="$extraHeader" submodule update --init --recursive
+          $cmakePath = Join-Path (Get-Location) 'CMakeLists.txt'
+          if (-not (Test-Path $cmakePath)) {
+            throw "CMakeLists.txt not found in $Env:LICENX_SUBMODULE_PATH after sync."
+          }
           $commit = git rev-parse HEAD
           Write-Host "::notice::Using LicenX commit $commit from $Env:LICENX_BRANCH"
           Pop-Location
@@ -693,14 +717,28 @@ jobs:
             throw "Collected artifacts directory $source not found."
           }
 
-          az storage file upload-batch `
-            --source $source `
-            --account-name $Env:AZURE_STORAGE_ACCOUNT `
-            --destination $Env:AZURE_STORAGE_SHARE `
-            --destination-path $Env:AZURE_STORAGE_PATH `
-            --overwrite `
-            --no-progress `
-            --auth-mode login
+          $targets = @(
+            @{ Folder = 'windows'; Destination = "$($Env:AZURE_STORAGE_PATH)/windows-x64" },
+            @{ Folder = 'linux'; Destination = "$($Env:AZURE_STORAGE_PATH)/linux-x64" },
+            @{ Folder = 'macos'; Destination = "$($Env:AZURE_STORAGE_PATH)/macos-universal" }
+          )
+
+          foreach ($target in $targets) {
+            $platformSource = Join-Path $source $target.Folder
+            if (-not (Test-Path $platformSource)) {
+              Write-Host "::warning::Platform artifacts not found at $platformSource. Skipping upload to $($target.Destination)."
+              continue
+            }
+
+            az storage file upload-batch `
+              --source $platformSource `
+              --account-name $Env:AZURE_STORAGE_ACCOUNT `
+              --destination $Env:AZURE_STORAGE_SHARE `
+              --destination-path $target.Destination `
+              --overwrite `
+              --no-progress `
+              --auth-mode login
+          }
 
       - name: Build and push LicenX server image
         shell: pwsh
