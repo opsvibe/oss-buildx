@@ -779,6 +779,10 @@ jobs:
             return
           }
 
+          if ([string]::IsNullOrWhiteSpace($Env:ACR_LOGIN_SERVER) -or [string]::IsNullOrWhiteSpace($Env:ACR_IMAGE_NAME)) {
+            throw "ACR_LOGIN_SERVER ($Env:ACR_LOGIN_SERVER) and ACR_IMAGE_NAME ($Env:ACR_IMAGE_NAME) must both be set before building the container image."
+          }
+
           $context = Split-Path $dockerfile -Parent
           az acr login --name $Env:ACR_REGISTRY
 
