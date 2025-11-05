@@ -77,12 +77,30 @@ jobs:
           submodules: recursive
           token: ${{ secrets.ERGOX_SUBMODULE_TOKEN }}
 
+      - name: Install native dependencies (vcpkg)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vcpkgRoot = Join-Path $Env:RUNNER_TEMP 'vcpkg'
+          if (-not (Test-Path $vcpkgRoot)) {
+            git clone https://github.com/microsoft/vcpkg $vcpkgRoot
+            & (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics
+          }
+
+          $vcpkgExe = Join-Path $vcpkgRoot 'vcpkg.exe'
+          & $vcpkgExe install curl[ssl]:x64-windows
+
+          $toolchainPath = Join-Path $vcpkgRoot 'scripts\buildsystems\vcpkg.cmake'
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "VCPKG_DEFAULT_TRIPLET=x64-windows" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "CMAKE_TOOLCHAIN_FILE=$toolchainPath" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Install build dependencies
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build libcurl4-openssl-dev
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -105,6 +123,12 @@ jobs:
           if ($Env:CMAKE_GENERATOR_PLATFORM) {
             $cmakeArgs += '-A'
             $cmakeArgs += $Env:CMAKE_GENERATOR_PLATFORM
+          }
+          if ($Env:CMAKE_TOOLCHAIN_FILE) {
+            $cmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$Env:CMAKE_TOOLCHAIN_FILE"
+          }
+          if ($Env:CMAKE_PREFIX_PATH) {
+            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$Env:CMAKE_PREFIX_PATH"
           }
           cmake @cmakeArgs
 
@@ -257,6 +281,26 @@ jobs:
           if ! brew list ninja >/dev/null 2>&1; then
             brew install ninja
           fi
+          if ! brew list curl >/dev/null 2>&1; then
+            brew install curl
+          fi
+
+          curl_prefix="$(brew --prefix curl)"
+          existing_prefix="${CMAKE_PREFIX_PATH:-}"
+          if [ -n "$existing_prefix" ]; then
+            echo "CMAKE_PREFIX_PATH=${curl_prefix}/lib/cmake;$existing_prefix" >> "$GITHUB_ENV"
+          else
+            echo "CMAKE_PREFIX_PATH=${curl_prefix}/lib/cmake" >> "$GITHUB_ENV"
+          fi
+
+          if [ -d "${curl_prefix}/lib/pkgconfig" ]; then
+            existing_pkg="${PKG_CONFIG_PATH:-}"
+            if [ -n "$existing_pkg" ]; then
+              echo "PKG_CONFIG_PATH=${curl_prefix}/lib/pkgconfig:$existing_pkg" >> "$GITHUB_ENV"
+            else
+              echo "PKG_CONFIG_PATH=${curl_prefix}/lib/pkgconfig" >> "$GITHUB_ENV"
+            fi
+          fi
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -280,6 +324,12 @@ jobs:
           if ($Env:CMAKE_GENERATOR_PLATFORM) {
             $cmakeArgs += '-A'
             $cmakeArgs += $Env:CMAKE_GENERATOR_PLATFORM
+          }
+          if ($Env:CMAKE_TOOLCHAIN_FILE) {
+            $cmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$Env:CMAKE_TOOLCHAIN_FILE"
+          }
+          if ($Env:CMAKE_PREFIX_PATH) {
+            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$Env:CMAKE_PREFIX_PATH"
           }
           cmake @cmakeArgs
 
@@ -449,6 +499,12 @@ jobs:
             $cmakeArgs += '-A'
             $cmakeArgs += $Env:CMAKE_GENERATOR_PLATFORM
           }
+          if ($Env:CMAKE_TOOLCHAIN_FILE) {
+            $cmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$Env:CMAKE_TOOLCHAIN_FILE"
+          }
+          if ($Env:CMAKE_PREFIX_PATH) {
+            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$Env:CMAKE_PREFIX_PATH"
+          }
           cmake @cmakeArgs
 
       - name: Build LicenX artifacts
@@ -602,7 +658,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build libcurl4-openssl-dev
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -626,6 +682,12 @@ jobs:
           if ($Env:CMAKE_GENERATOR_PLATFORM) {
             $cmakeArgs += '-A'
             $cmakeArgs += $Env:CMAKE_GENERATOR_PLATFORM
+          }
+          if ($Env:CMAKE_TOOLCHAIN_FILE) {
+            $cmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$Env:CMAKE_TOOLCHAIN_FILE"
+          }
+          if ($Env:CMAKE_PREFIX_PATH) {
+            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$Env:CMAKE_PREFIX_PATH"
           }
           cmake @cmakeArgs
 
