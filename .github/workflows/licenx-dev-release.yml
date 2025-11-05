@@ -139,6 +139,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $Env:LICENX_MACHINE_ID_OVERRIDE = '0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
           if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
@@ -324,6 +325,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $Env:LICENX_MACHINE_ID_OVERRIDE = '0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
           if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
@@ -500,6 +502,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $Env:LICENX_MACHINE_ID_OVERRIDE = '0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210'
           $multiConfig = $Env:CMAKE_MULTICONFIG -eq 'true'
           $ctestArgs = @('--test-dir', $Env:LICENX_BUILD_DIR, '--output-on-failure')
           if ($multiConfig) { $ctestArgs += @('-C', $Env:LICENX_BUILD_CONFIG) }
