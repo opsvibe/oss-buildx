@@ -32,6 +32,11 @@ env:
   LICENX_BUILD_CONFIG: Release
   LICENX_ARTIFACT_ROOT: ergox/licenx/artifacts
   LICENX_ENVIRONMENT_INPUT: ${{ github.event.inputs.licenx-environment || 'dev' }}
+  AZURE_STORAGE_ACCOUNT: ergoxbuild
+  AZURE_STORAGE_PATH: licenx
+  ACR_REGISTRY: ergox
+  ACR_LOGIN_SERVER: ergox-ehaeg0gpesc0gag6.azurecr.io
+  ACR_IMAGE_NAME: licenxsrv
 
 jobs:
   build-linux:
@@ -79,6 +84,10 @@ jobs:
           sudo apt-get install -y \
             ninja-build \
             pkg-config \
+            autoconf \
+            automake \
+            libtool \
+            m4 \
             libcurl4-openssl-dev \
             libsodium-dev \
             libssl-dev \
@@ -99,7 +108,7 @@ jobs:
             '-G', $Env:CMAKE_GENERATOR,
             "-DLICENX_ENVIRONMENT=$Env:LICENX_ENVIRONMENT_INPUT",
             '-DLICENX_BUILD_TESTS=ON',
-            '-DLICENX_USE_VENDORED_DEPS=OFF',
+            '-DLICENX_USE_VENDORED_DEPS=ON',
             '-DLICENX_BUILD_GATEWAY=OFF'
           )
           if ($Env:CMAKE_MULTICONFIG -ne 'true') {
@@ -264,7 +273,7 @@ jobs:
         run: |
           set -euo pipefail
           brew update
-          brew install ninja pkg-config curl libsodium
+          brew install ninja pkg-config curl libsodium autoconf automake libtool
           curl_prefix="$(brew --prefix curl)"
           sodium_prefix="$(brew --prefix libsodium)"
           echo "PKG_CONFIG_PATH=$curl_prefix/lib/pkgconfig:$sodium_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
@@ -284,7 +293,7 @@ jobs:
             '-G', $Env:CMAKE_GENERATOR,
             "-DLICENX_ENVIRONMENT=$Env:LICENX_ENVIRONMENT_INPUT",
             '-DLICENX_BUILD_TESTS=ON',
-            '-DLICENX_USE_VENDORED_DEPS=OFF',
+            '-DLICENX_USE_VENDORED_DEPS=ON',
             '-DLICENX_BUILD_GATEWAY=OFF'
           )
           if ($Env:CMAKE_MULTICONFIG -ne 'true') {
@@ -632,6 +641,10 @@ jobs:
           sudo apt-get install -y \
             ninja-build \
             pkg-config \
+            autoconf \
+            automake \
+            libtool \
+            m4 \
             libcurl4-openssl-dev \
             libsodium-dev \
             libssl-dev \
@@ -652,7 +665,7 @@ jobs:
             '-G', $Env:CMAKE_GENERATOR,
             "-DLICENX_ENVIRONMENT=$Env:LICENX_ENVIRONMENT_INPUT",
             '-DLICENX_BUILD_TESTS=OFF',
-            '-DLICENX_USE_VENDORED_DEPS=OFF',
+            '-DLICENX_USE_VENDORED_DEPS=ON',
             '-DLICENX_BUILD_GATEWAY=OFF'
           )
           if ($Env:CMAKE_MULTICONFIG -ne 'true') {
@@ -713,23 +726,36 @@ jobs:
             throw "Collected artifacts directory $source not found."
           }
 
+          $containerName = if ([string]::IsNullOrWhiteSpace($Env:LICENX_ENVIRONMENT_INPUT)) {
+            'dev'
+          }
+          else {
+            $Env:LICENX_ENVIRONMENT_INPUT
+          }
+
           $targets = @(
             @{ Folder = 'windows'; Destination = "$($Env:AZURE_STORAGE_PATH)/windows-x64" },
             @{ Folder = 'linux'; Destination = "$($Env:AZURE_STORAGE_PATH)/linux-x64" },
             @{ Folder = 'macos'; Destination = "$($Env:AZURE_STORAGE_PATH)/macos-universal" }
           )
 
+          az storage container create `
+            --name $containerName `
+            --account-name $Env:AZURE_STORAGE_ACCOUNT `
+            --auth-mode login `
+            --only-show-errors | Out-Null
+
           foreach ($target in $targets) {
             $platformSource = Join-Path $source $target.Folder
             if (-not (Test-Path $platformSource)) {
-              Write-Host "::warning::Platform artifacts not found at $platformSource. Skipping upload to $($target.Destination)."
+              Write-Host "::warning::Platform artifacts not found at $platformSource. Skipping upload to container $containerName path $($target.Destination)."
               continue
             }
 
-            az storage file upload-batch `
+            az storage blob upload-batch `
               --source $platformSource `
               --account-name $Env:AZURE_STORAGE_ACCOUNT `
-              --destination $Env:AZURE_STORAGE_SHARE `
+              --destination $containerName `
               --destination-path $target.Destination `
               --overwrite `
               --no-progress `
