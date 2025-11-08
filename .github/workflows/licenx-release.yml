@@ -1,12 +1,17 @@
-name: licenx-dev-release
+name: licenx-release
 
 on:
   workflow_dispatch:
     inputs:
       licenx-environment:
         description: CMake environment passed to the LicenX generator
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
         default: dev
-        required: false
+        required: true
       licenx-branch:
         description: LicenX submodule branch or ref to build
         default: main
