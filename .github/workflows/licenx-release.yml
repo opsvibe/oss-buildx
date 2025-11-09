@@ -1190,19 +1190,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: licenx-windows
-          path: collected/windows
+          path: collected/windows/publish
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
           name: licenx-linux
-          path: collected/linux
+          path: collected/linux/publish
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: licenx-macos
-          path: collected/macos
+          path: collected/macos/publish
 
       - name: Azure login
         uses: azure/login@v2
