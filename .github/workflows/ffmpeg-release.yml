@@ -15,6 +15,7 @@ jobs:
   build:
     name: Build FFmpeg (${{ matrix.export_dir }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_failure }}
     env:
       VCPKG_DISABLE_METRICS: "1"
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
@@ -29,7 +30,10 @@ jobs:
             export_dir: linux-x64
             bootstrap: ./vcpkg/bootstrap-vcpkg.sh
             exec: ./vcpkg/vcpkg
-            setup: ""
+            setup: |
+              sudo apt-get update
+              sudo apt-get install -y nasm pkg-config
+            allow_failure: false
           - os: ubuntu-22.04
             triplet: arm64-linux
             export_dir: linux-arm64
@@ -37,7 +41,8 @@ jobs:
             exec: ./vcpkg/vcpkg
             setup: |
               sudo apt-get update
-              sudo apt-get install -y g++-aarch64-linux-gnu pkg-config-aarch64-linux-gnu
+              sudo apt-get install -y g++-aarch64-linux-gnu pkg-config nasm
+            allow_failure: false
           - os: ubuntu-22.04
             triplet: arm64-android
             export_dir: android-arm64
@@ -46,36 +51,42 @@ jobs:
             setup: |
               sudo apt-get update
               sudo apt-get install -y unzip zip default-jdk
+            allow_failure: false
           - os: macos-14
             triplet: arm64-osx
             export_dir: macos-arm64
             bootstrap: ./vcpkg/bootstrap-vcpkg.sh
             exec: ./vcpkg/vcpkg
             setup: ""
+            allow_failure: false
           - os: macos-13
             triplet: x64-osx
             export_dir: macos-x64
             bootstrap: ./vcpkg/bootstrap-vcpkg.sh
-            exec: ./vcpkg/vcpkg
+            exec: /usr/bin/arch -x86_64 ./vcpkg/vcpkg
             setup: ""
+            allow_failure: true
           - os: macos-14
             triplet: arm64-ios
             export_dir: ios-arm64
             bootstrap: ./vcpkg/bootstrap-vcpkg.sh
             exec: ./vcpkg/vcpkg
             setup: ""
+            allow_failure: false
           - os: windows-2022
             triplet: x64-windows
             export_dir: windows-x64
             bootstrap: .\vcpkg\bootstrap-vcpkg.bat
             exec: .\vcpkg\vcpkg.exe
             setup: ""
+            allow_failure: false
           - os: windows-2022
             triplet: arm64-windows
             export_dir: windows-arm64
             bootstrap: .\vcpkg\bootstrap-vcpkg.bat
             exec: .\vcpkg\vcpkg.exe
             setup: ""
+            allow_failure: false
 
     steps:
       - name: Checkout repository
@@ -89,9 +100,6 @@ jobs:
           if [ ! -d "${{ env.VCPKG_ROOT }}" ]; then
             git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ env.VCPKG_ROOT }}"
           fi
-          if [ ! -d "${{ env.VCPKG_ROOT }}/.git" ]; then
-            git -C "${{ env.VCPKG_ROOT }}" init
-          fi
         shell: bash
 
       - name: Ensure vcpkg sources (Windows)
@@ -102,7 +110,7 @@ jobs:
           }
         shell: pwsh
 
-      - name: Install host prerequisites
+      - name: Install host prerequisites (POSIX)
         if: runner.os != 'Windows' && matrix.setup != ''
         run: ${{ matrix.setup }}
         shell: bash
@@ -136,8 +144,15 @@ jobs:
           }
         shell: pwsh
 
-      - name: Bootstrap vcpkg
+      - name: Bootstrap vcpkg (POSIX)
+        if: runner.os != 'Windows'
         run: ${{ matrix.bootstrap }}
+        shell: bash
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        run: ${{ matrix.bootstrap }}
+        shell: pwsh
 
       - name: Install FFmpeg dependencies
         run: >-
@@ -147,7 +162,7 @@ jobs:
         run: >-
           ${{ matrix.exec }} export ffmpeg --triplet ${{ matrix.triplet }} --raw --output="${{ env.EXPORT_DIR }}"
 
-      - name: List exported contents
+      - name: List exported contents (POSIX)
         if: runner.os != 'Windows'
         run: |
           ls -R "${{ env.EXPORT_DIR }}"

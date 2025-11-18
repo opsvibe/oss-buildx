@@ -6,11 +6,11 @@ The repository ships `.github/workflows/ffmpeg-release.yml`, which packages FFmp
 
 Each job exports a raw vcpkg payload into `third_party/ffmpeg/<platform>` and uploads the folder as an artifact named `<platform>-ffmpeg`. The current target matrix is:
 
-- `linux-x64` (`x64-linux` triplet)
-- `linux-arm64` (`arm64-linux` triplet) – installs `g++-aarch64-linux-gnu` and `pkg-config-aarch64-linux-gnu` before building
+- `linux-x64` (`x64-linux` triplet) – installs `nasm` and `pkg-config` so FFmpeg’s NASM-based filters compile cleanly
+- `linux-arm64` (`arm64-linux` triplet) – installs `g++-aarch64-linux-gnu`, `pkg-config`, and `nasm` for cross-compiling
 - `android-arm64` (`arm64-android` triplet) – installs `zip`, `unzip`, and `default-jdk`
 - `macos-arm64` (`arm64-osx` triplet)
-- `macos-x64` (`x64-osx` triplet, runs on the macOS-13 Intel runner)
+- `macos-x64` (`x64-osx` triplet, runs on the macOS-13 Intel runner; GitHub is deprecating this image, so the workflow marks the job as optional and brownouts are expected)
 - `ios-arm64` (`arm64-ios` triplet)
 - `windows-x64` (`x64-windows` triplet)
 - `windows-arm64` (`arm64-windows` triplet)
