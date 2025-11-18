@@ -83,6 +83,25 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Ensure vcpkg sources (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          if [ ! -d "${{ env.VCPKG_ROOT }}" ]; then
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ env.VCPKG_ROOT }}"
+          fi
+          if [ ! -d "${{ env.VCPKG_ROOT }}/.git" ]; then
+            git -C "${{ env.VCPKG_ROOT }}" init
+          fi
+        shell: bash
+
+      - name: Ensure vcpkg sources (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          if (-not (Test-Path "${{ env.VCPKG_ROOT }}")) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ env.VCPKG_ROOT }}"
+          }
+        shell: pwsh
+
       - name: Install host prerequisites
         if: runner.os != 'Windows' && matrix.setup != ''
         run: ${{ matrix.setup }}

@@ -2,7 +2,7 @@
 
 ## FFmpeg Export Workflow
 
-The repository ships `.github/workflows/ffmpeg-release.yml`, which packages FFmpeg via vcpkg for every runtime we need. Trigger it manually with **Run workflow** (optionally passing a `reason`) or let it run automatically whenever the workflow itself or anything under `vcpkg/` changes.
+The repository ships `.github/workflows/ffmpeg-release.yml`, which packages FFmpeg via vcpkg for every runtime we need. Trigger it manually with **Run workflow** (optionally passing a `reason`) or let it run automatically whenever the workflow itself or anything under `vcpkg/` changes. Every run checks out this repo and, if a `vcpkg/` folder is missing (for example on fresh forks), clones the upstream `microsoft/vcpkg` repository before bootstrapping so the build never fails with “No such file or directory”.
 
 Each job exports a raw vcpkg payload into `third_party/ffmpeg/<platform>` and uploads the folder as an artifact named `<platform>-ffmpeg`. The current target matrix is:
 
